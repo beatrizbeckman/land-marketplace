@@ -1,10 +1,25 @@
-# <Project Name>
+# Land Marketplace
 
-> TODO: one-line description of the project.
+> An interactive map-based platform for listing and searching land plots for sale.
 
 ## About
 
-TODO: what the system is and what problem it solves.
+Land Marketplace is an MVP of a real estate platform where listing and searching
+for land plots happens directly on an interactive map.
+
+- **Register a plot:** the user draws the exact polygon of the plot on the map and
+  fills in a short form (total price, description and contact). The system rejects
+  the registration if the new polygon overlaps an existing plot.
+- **Search plots:** the user draws a circle on the map with the mouse, and only the
+  plots intersecting that circular area are rendered.
+- **View details:** clicking a plot opens a popup with its information.
+
+## Tech Stack
+
+- **Backend:** Java, Spring Boot, Spring Data JPA
+- **Database:** PostgreSQL with the PostGIS extension
+- **Frontend:** React, Vite, OpenLayers
+- **Infrastructure:** Docker Compose
 
 ## How It Works
 
@@ -16,24 +31,49 @@ TODO: step-by-step to start the full environment with docker-compose.
 
 ## Running without Docker
 
+### Prerequisites
+
+- JDK 23
+- Node.js 20 or newer
+- Docker (used only to run the database) or a local PostgreSQL with PostGIS
+
 ### Database
 
-TODO
+Start only the database service:
+
+    docker compose up -d db
+
+The database is available at `localhost:5432` with the default credentials listed
+in `.env.example`. To override them, copy `.env.example` to `.env` and edit the values.
 
 ### Backend
 
-TODO
+    cd backend
+    ./mvnw spring-boot:run
+
+The API starts at `http://localhost:8081`. On Windows (outside Git Bash), use
+`mvnw.cmd` instead of `./mvnw`.
+
+The connection settings can be overridden with the `DB_URL`, `DB_USERNAME`,
+`DB_PASSWORD` and `SERVER_PORT` environment variables.
 
 ### Frontend
 
-TODO
+    cd frontend
+    npm install
+    npm run dev
+
+The application is available at `http://localhost:5173`.
 
 ## Running the Tests
 
 ### Backend
 
-TODO: test command and how to open the coverage report (JaCoCo).
+    cd backend
+    ./mvnw test
+
+TODO: how to open the coverage report (JaCoCo).
 
 ### Frontend
 
-TODO: test command and how to open the coverage report (Jest).
+TODO: test command and how to open the coverage report.
