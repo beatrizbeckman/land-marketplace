@@ -1,0 +1,9 @@
+# Env
+.env
+.env.local
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
