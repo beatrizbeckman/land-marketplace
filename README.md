@@ -33,7 +33,7 @@ TODO: step-by-step to start the full environment with docker-compose.
 
 ### Prerequisites
 
-- JDK 23
+- JDK 21 or newer
 - Node.js 20.19+ or 22.12+
 - Docker (used only to run the database) or a local PostgreSQL with PostGIS
 
