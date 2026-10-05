@@ -24,7 +24,7 @@ class BoundingBoxTest {
 	@ValueSource(strings = { "", "-47.5,-15.5,-46.5", "-47.5,-15.5,-46.5,-14.5,0", "west,-15.5,-46.5,-14.5" })
 	void rejectsValuesThatAreNotFourNumbers(String bbox) {
 		assertThatThrownBy(() -> BoundingBox.parse(bbox))
-				.isInstanceOf(InvalidSearchAreaException.class)
+				.isInstanceOf(InvalidSearchException.class)
 				.hasMessage("bbox must be minLon,minLat,maxLon,maxLat");
 	}
 
@@ -33,7 +33,7 @@ class BoundingBoxTest {
 			"NaN,-15.5,-46.5,-14.5" })
 	void rejectsBoxesWithoutArea(String bbox) {
 		assertThatThrownBy(() -> BoundingBox.parse(bbox))
-				.isInstanceOf(InvalidSearchAreaException.class)
+				.isInstanceOf(InvalidSearchException.class)
 				.hasMessage("bbox minimums must be lower than its maximums");
 	}
 

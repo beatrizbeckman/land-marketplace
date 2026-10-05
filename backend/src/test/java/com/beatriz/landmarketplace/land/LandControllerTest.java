@@ -41,6 +41,8 @@ class LandControllerTest {
 			}
 			""";
 
+	private static final LandFilter NO_FILTER = new LandFilter(null, null, null, null);
+
 	@Autowired
 	private MockMvc mockMvc;
 
@@ -145,7 +147,7 @@ class LandControllerTest {
 
 	@Test
 	void listsLandsInTheBoundingBoxAsFeatureCollection() throws Exception {
-		when(landService.findInBoundingBox(new BoundingBox(-47.5, -15.5, -46.5, -14.5)))
+		when(landService.findInBoundingBox(new BoundingBox(-47.5, -15.5, -46.5, -14.5), NO_FILTER))
 				.thenReturn(LandFeatureCollection.of(List.of(feature())));
 
 		mockMvc.perform(get("/api/lands").param("bbox", "-47.5,-15.5,-46.5,-14.5"))
@@ -174,7 +176,7 @@ class LandControllerTest {
 
 	@Test
 	void searchesLandsInTheCircle() throws Exception {
-		when(landService.findInCircle(new SearchCircle(-47.0, -15.0, 250.0)))
+		when(landService.findInCircle(new SearchCircle(-47.0, -15.0, 250.0), NO_FILTER))
 				.thenReturn(LandFeatureCollection.of(List.of(feature())));
 
 		mockMvc.perform(get("/api/lands/search").param("lon", "-47.0").param("lat", "-15.0").param("radius", "250"))
@@ -195,6 +197,63 @@ class LandControllerTest {
 		mockMvc.perform(get("/api/lands/search").param("lon", "west").param("lat", "-15.0").param("radius", "250"))
 				.andExpect(status().isBadRequest())
 				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+	}
+
+	@Test
+	void passesOptionalFiltersToTheBoundingBoxListing() throws Exception {
+		LandFilter filter = new LandFilter(new BigDecimal("1000.50"), new BigDecimal("2000"), 300.0, 400.5);
+		when(landService.findInBoundingBox(new BoundingBox(-47.5, -15.5, -46.5, -14.5), filter))
+				.thenReturn(LandFeatureCollection.of(List.of(feature())));
+
+		mockMvc.perform(get("/api/lands").param("bbox", "-47.5,-15.5,-46.5,-14.5")
+				.param("minPrice", "1000.50").param("maxPrice", "2000")
+				.param("minArea", "300").param("maxArea", "400.5"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.features", hasSize(1)));
+	}
+
+	@Test
+	void passesOptionalFiltersToTheCircleSearch() throws Exception {
+		LandFilter filter = new LandFilter(null, new BigDecimal("2000"), 300.0, null);
+		when(landService.findInCircle(new SearchCircle(-47.0, -15.0, 250.0), filter))
+				.thenReturn(LandFeatureCollection.of(List.of(feature())));
+
+		mockMvc.perform(get("/api/lands/search").param("lon", "-47.0").param("lat", "-15.0").param("radius", "250")
+				.param("maxPrice", "2000").param("minArea", "300"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.features", hasSize(1)));
+	}
+
+	@Test
+	void rejectsInconsistentFilters() throws Exception {
+		mockMvc.perform(get("/api/lands").param("bbox", "-47.5,-15.5,-46.5,-14.5")
+				.param("minPrice", "2000").param("maxPrice", "1000"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.detail").value("minPrice must not be greater than maxPrice"));
+	}
+
+	@Test
+	void rejectsNonNumericFilters() throws Exception {
+		mockMvc.perform(get("/api/lands").param("bbox", "-47.5,-15.5,-46.5,-14.5").param("minPrice", "cheap"))
+				.andExpect(status().isBadRequest())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+	}
+
+	@Test
+	void rejectsMalformedJson() throws Exception {
+		postLand("{ \"type\": \"Feature\", ")
+				.andExpect(status().isBadRequest())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+	}
+
+	@Test
+	void hidesTheCauseOfUnexpectedErrors() throws Exception {
+		when(landService.register(any())).thenThrow(new IllegalStateException("connection pool exhausted"));
+
+		postLand(VALID_FEATURE)
+				.andExpect(status().isInternalServerError())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+				.andExpect(jsonPath("$.detail").value("An unexpected error occurred"));
 	}
 
 	private static LandFeature feature() {

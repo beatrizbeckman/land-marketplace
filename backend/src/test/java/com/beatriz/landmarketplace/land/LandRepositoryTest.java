@@ -22,6 +22,10 @@ class LandRepositoryTest {
 
 	private static final Polygon EXISTING = rectangle(-47.000, -15.000, -46.998, -14.998);
 
+	// About 11,900 m2 and 47,600 m2 at this latitude.
+	private static final Polygon SMALL = rectangle(-47.005, -15.005, -47.004, -15.004);
+	private static final Polygon LARGE = rectangle(-47.000, -15.000, -46.998, -14.998);
+
 	@Autowired
 	private LandRepository landRepository;
 
@@ -100,7 +104,8 @@ class LandRepositoryTest {
 		Land crossingTheEdge = save(rectangle(-46.991, -15.000, -46.989, -14.998));
 		save(rectangle(-46.900, -15.000, -46.898, -14.998));
 
-		List<Land> found = landRepository.findIntersectingBoundingBox(-47.010, -15.010, -46.990, -14.990);
+		List<Land> found = landRepository.findIntersectingBoundingBox(-47.010, -15.010, -46.990, -14.990,
+				null, null, null, null);
 
 		assertThat(found).extracting(Land::getId).containsExactly(inside.getId(), crossingTheEdge.getId());
 	}
@@ -109,7 +114,8 @@ class LandRepositoryTest {
 	void findsNothingInAnEmptyBoundingBox() {
 		save(EXISTING);
 
-		assertThat(landRepository.findIntersectingBoundingBox(-40.0, -10.0, -39.0, -9.0)).isEmpty();
+		assertThat(landRepository.findIntersectingBoundingBox(-40.0, -10.0, -39.0, -9.0,
+				null, null, null, null)).isEmpty();
 	}
 
 	// The center is 0.001 degrees west of EXISTING, about 107.5 m at this latitude.
@@ -117,7 +123,7 @@ class LandRepositoryTest {
 	void findsLandWhenTheCircleReachesOnlyItsBorder() {
 		Land land = save(EXISTING);
 
-		List<Land> found = landRepository.findWithinRadius(-47.001, -14.999, 110);
+		List<Land> found = landRepository.findWithinRadius(-47.001, -14.999, 110, null, null, null, null);
 
 		assertThat(found).extracting(Land::getId).containsExactly(land.getId());
 	}
@@ -126,20 +132,83 @@ class LandRepositoryTest {
 	void findsNothingWhenTheCircleStopsShortOfTheLand() {
 		save(EXISTING);
 
-		assertThat(landRepository.findWithinRadius(-47.001, -14.999, 100)).isEmpty();
+		assertThat(landRepository.findWithinRadius(-47.001, -14.999, 100, null, null, null, null)).isEmpty();
 	}
 
 	@Test
 	void findsLandThatContainsTheWholeCircle() {
 		Land land = save(EXISTING);
 
-		List<Land> found = landRepository.findWithinRadius(-46.999, -14.999, 10);
+		List<Land> found = landRepository.findWithinRadius(-46.999, -14.999, 10, null, null, null, null);
 
 		assertThat(found).extracting(Land::getId).containsExactly(land.getId());
 	}
 
+	@Test
+	void filtersBoundingBoxResultsByPrice() {
+		save(SMALL, "90000.00");
+		Land expensive = save(LARGE, "150000.00");
+
+		assertThat(inBoundingBox(new BigDecimal("100000"), null, null, null))
+				.extracting(Land::getId).containsExactly(expensive.getId());
+		assertThat(inBoundingBox(new BigDecimal("150000.00"), new BigDecimal("150000.00"), null, null))
+				.extracting(Land::getId).containsExactly(expensive.getId());
+		assertThat(inBoundingBox(null, new BigDecimal("50000"), null, null)).isEmpty();
+	}
+
+	@Test
+	void filtersBoundingBoxResultsByArea() {
+		Land small = save(SMALL, "90000.00");
+		Land large = save(LARGE, "150000.00");
+
+		assertThat(inBoundingBox(null, null, 20_000.0, null)).extracting(Land::getId).containsExactly(large.getId());
+		assertThat(inBoundingBox(null, null, null, 20_000.0)).extracting(Land::getId).containsExactly(small.getId());
+		assertThat(inBoundingBox(null, null, 10_000.0, 50_000.0)).hasSize(2);
+	}
+
+	@Test
+	void filtersRadiusResultsByPrice() {
+		Land cheap = save(SMALL, "90000.00");
+		Land expensive = save(LARGE, "150000.00");
+
+		assertThat(inRadius(null, new BigDecimal("100000"), null, null))
+				.extracting(Land::getId).containsExactly(cheap.getId());
+		assertThat(inRadius(new BigDecimal("100000"), null, null, null))
+				.extracting(Land::getId).containsExactly(expensive.getId());
+	}
+
+	@Test
+	void filtersRadiusResultsByArea() {
+		Land small = save(SMALL, "90000.00");
+		Land large = save(LARGE, "150000.00");
+
+		assertThat(inRadius(null, null, null, 20_000.0)).extracting(Land::getId).containsExactly(small.getId());
+		assertThat(inRadius(null, null, 20_000.0, null)).extracting(Land::getId).containsExactly(large.getId());
+	}
+
+	@Test
+	void combinesPriceAndAreaFilters() {
+		save(SMALL, "90000.00");
+		save(LARGE, "150000.00");
+
+		assertThat(inRadius(new BigDecimal("100000"), null, null, 20_000.0)).isEmpty();
+	}
+
+	private List<Land> inBoundingBox(BigDecimal minPrice, BigDecimal maxPrice, Double minArea, Double maxArea) {
+		return landRepository.findIntersectingBoundingBox(-47.010, -15.010, -46.990, -14.990,
+				minPrice, maxPrice, minArea, maxArea);
+	}
+
+	private List<Land> inRadius(BigDecimal minPrice, BigDecimal maxPrice, Double minArea, Double maxArea) {
+		return landRepository.findWithinRadius(-47.000, -15.000, 2_000, minPrice, maxPrice, minArea, maxArea);
+	}
+
 	private Land save(Polygon polygon) {
-		return landRepository.saveAndFlush(new Land(polygon, new BigDecimal("150000.50"),
+		return save(polygon, "150000.50");
+	}
+
+	private Land save(Polygon polygon, String price) {
+		return landRepository.saveAndFlush(new Land(polygon, new BigDecimal(price),
 				"Flat plot close to the main road", "owner@example.com"));
 	}
 

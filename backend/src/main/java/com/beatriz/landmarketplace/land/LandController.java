@@ -1,5 +1,7 @@
 package com.beatriz.landmarketplace.land;
 
+import java.math.BigDecimal;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,14 +30,24 @@ class LandController {
 	}
 
 	@GetMapping
-	LandFeatureCollection listInBoundingBox(@RequestParam String bbox) {
-		return landService.findInBoundingBox(BoundingBox.parse(bbox));
+	LandFeatureCollection listInBoundingBox(@RequestParam String bbox,
+			@RequestParam(required = false) BigDecimal minPrice,
+			@RequestParam(required = false) BigDecimal maxPrice,
+			@RequestParam(required = false) Double minArea,
+			@RequestParam(required = false) Double maxArea) {
+		return landService.findInBoundingBox(BoundingBox.parse(bbox),
+				new LandFilter(minPrice, maxPrice, minArea, maxArea));
 	}
 
 	@GetMapping("/search")
 	LandFeatureCollection searchInCircle(@RequestParam double lon, @RequestParam double lat,
-			@RequestParam double radius) {
-		return landService.findInCircle(new SearchCircle(lon, lat, radius));
+			@RequestParam double radius,
+			@RequestParam(required = false) BigDecimal minPrice,
+			@RequestParam(required = false) BigDecimal maxPrice,
+			@RequestParam(required = false) Double minArea,
+			@RequestParam(required = false) Double maxArea) {
+		return landService.findInCircle(new SearchCircle(lon, lat, radius),
+				new LandFilter(minPrice, maxPrice, minArea, maxArea));
 	}
 
 }

@@ -14,7 +14,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import com.beatriz.landmarketplace.land.InvalidGeometryException;
-import com.beatriz.landmarketplace.land.InvalidSearchAreaException;
+import com.beatriz.landmarketplace.land.InvalidSearchException;
 import com.beatriz.landmarketplace.land.LandOverlapException;
 
 @RestControllerAdvice
@@ -28,14 +28,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
 	}
 
-	@ExceptionHandler(InvalidSearchAreaException.class)
-	ProblemDetail handleInvalidSearchArea(InvalidSearchAreaException exception) {
+	@ExceptionHandler(InvalidSearchException.class)
+	ProblemDetail handleInvalidSearch(InvalidSearchException exception) {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
 	}
 
 	@ExceptionHandler(InvalidGeometryException.class)
 	ProblemDetail handleInvalidGeometry(InvalidGeometryException exception) {
 		return validationProblem(List.of(new FieldMessage("geometry", exception.getMessage())));
+	}
+
+	// Last resort: the cause goes to the log, never to the response body.
+	@ExceptionHandler(Exception.class)
+	ProblemDetail handleUnexpected(Exception exception) {
+		logger.error("Unexpected error", exception);
+		return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
 	}
 
 	@Override

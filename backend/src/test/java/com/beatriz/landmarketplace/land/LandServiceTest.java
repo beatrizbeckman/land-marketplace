@@ -27,6 +27,8 @@ class LandServiceTest {
 
 	private static final GeoJsonPolygon GEOMETRY = geoJsonRectangle(-47.000, -15.000, -46.998, -14.998);
 
+	private static final LandFilter NO_FILTER = new LandFilter(null, null, null, null);
+
 	@Mock
 	private LandRepository landRepository;
 
@@ -85,9 +87,11 @@ class LandServiceTest {
 
 	@Test
 	void returnsLandsInTheBoundingBoxAsFeatureCollection() {
-		when(landRepository.findIntersectingBoundingBox(-47.5, -15.5, -46.5, -14.5)).thenReturn(List.of(land()));
+		when(landRepository.findIntersectingBoundingBox(-47.5, -15.5, -46.5, -14.5, null, null, null, null))
+				.thenReturn(List.of(land()));
 
-		LandFeatureCollection collection = landService.findInBoundingBox(new BoundingBox(-47.5, -15.5, -46.5, -14.5));
+		LandFeatureCollection collection = landService.findInBoundingBox(
+				new BoundingBox(-47.5, -15.5, -46.5, -14.5), NO_FILTER);
 
 		assertThat(collection.type()).isEqualTo("FeatureCollection");
 		assertThat(collection.features()).singleElement()
@@ -96,9 +100,9 @@ class LandServiceTest {
 
 	@Test
 	void returnsLandsInTheCircleAsFeatureCollection() {
-		when(landRepository.findWithinRadius(-47.0, -15.0, 250.0)).thenReturn(List.of(land()));
+		when(landRepository.findWithinRadius(-47.0, -15.0, 250.0, null, null, null, null)).thenReturn(List.of(land()));
 
-		LandFeatureCollection collection = landService.findInCircle(new SearchCircle(-47.0, -15.0, 250.0));
+		LandFeatureCollection collection = landService.findInCircle(new SearchCircle(-47.0, -15.0, 250.0), NO_FILTER);
 
 		assertThat(collection.features()).singleElement()
 				.satisfies(feature -> assertThat(feature.properties().contact()).isEqualTo("owner@example.com"));
@@ -106,10 +110,23 @@ class LandServiceTest {
 
 	@Test
 	void returnsEmptyFeatureCollectionWhenNothingIsFound() {
-		LandFeatureCollection collection = landService.findInCircle(new SearchCircle(-47.0, -15.0, 250.0));
+		LandFeatureCollection collection = landService.findInCircle(new SearchCircle(-47.0, -15.0, 250.0), NO_FILTER);
 
 		assertThat(collection.type()).isEqualTo("FeatureCollection");
 		assertThat(collection.features()).isEmpty();
+	}
+
+	@Test
+	void passesTheFiltersToBothQueries() {
+		LandFilter filter = new LandFilter(new BigDecimal("1000"), new BigDecimal("2000"), 300.0, 400.0);
+
+		landService.findInBoundingBox(new BoundingBox(-47.5, -15.5, -46.5, -14.5), filter);
+		landService.findInCircle(new SearchCircle(-47.0, -15.0, 250.0), filter);
+
+		verify(landRepository).findIntersectingBoundingBox(-47.5, -15.5, -46.5, -14.5,
+				new BigDecimal("1000"), new BigDecimal("2000"), 300.0, 400.0);
+		verify(landRepository).findWithinRadius(-47.0, -15.0, 250.0,
+				new BigDecimal("1000"), new BigDecimal("2000"), 300.0, 400.0);
 	}
 
 	private static Land land() {

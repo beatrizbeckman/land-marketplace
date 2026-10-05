@@ -10,21 +10,21 @@ record BoundingBox(double minLon, double minLat, double maxLon, double maxLat) {
 		minLat = Math.clamp(minLat, -90.0, 90.0);
 		maxLat = Math.clamp(maxLat, -90.0, 90.0);
 		if (!(minLon < maxLon && minLat < maxLat)) {
-			throw new InvalidSearchAreaException("bbox minimums must be lower than its maximums");
+			throw new InvalidSearchException("bbox minimums must be lower than its maximums");
 		}
 	}
 
 	static BoundingBox parse(String bbox) {
 		String[] parts = bbox.split(",");
 		if (parts.length != 4) {
-			throw new InvalidSearchAreaException("bbox must be minLon,minLat,maxLon,maxLat");
+			throw new InvalidSearchException("bbox must be minLon,minLat,maxLon,maxLat");
 		}
 		try {
 			return new BoundingBox(Double.parseDouble(parts[0]), Double.parseDouble(parts[1]),
 					Double.parseDouble(parts[2]), Double.parseDouble(parts[3]));
 		}
 		catch (NumberFormatException exception) {
-			throw new InvalidSearchAreaException("bbox must be minLon,minLat,maxLon,maxLat");
+			throw new InvalidSearchException("bbox must be minLon,minLat,maxLon,maxLat");
 		}
 	}
 

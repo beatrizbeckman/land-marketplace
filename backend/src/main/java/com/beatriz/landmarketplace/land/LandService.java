@@ -33,15 +33,17 @@ public class LandService {
 	}
 
 	@Transactional(readOnly = true)
-	public LandFeatureCollection findInBoundingBox(BoundingBox box) {
+	public LandFeatureCollection findInBoundingBox(BoundingBox box, LandFilter filter) {
 		return toFeatureCollection(landRepository.findIntersectingBoundingBox(
-				box.minLon(), box.minLat(), box.maxLon(), box.maxLat()));
+				box.minLon(), box.minLat(), box.maxLon(), box.maxLat(),
+				filter.minPrice(), filter.maxPrice(), filter.minArea(), filter.maxArea()));
 	}
 
 	@Transactional(readOnly = true)
-	public LandFeatureCollection findInCircle(SearchCircle circle) {
+	public LandFeatureCollection findInCircle(SearchCircle circle, LandFilter filter) {
 		return toFeatureCollection(landRepository.findWithinRadius(
-				circle.lon(), circle.lat(), circle.radiusInMeters()));
+				circle.lon(), circle.lat(), circle.radiusInMeters(),
+				filter.minPrice(), filter.maxPrice(), filter.minArea(), filter.maxArea()));
 	}
 
 	private LandFeatureCollection toFeatureCollection(List<Land> lands) {
