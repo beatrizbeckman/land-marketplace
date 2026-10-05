@@ -4,8 +4,11 @@ import static com.beatriz.landmarketplace.land.TestPolygons.geoJsonRectangle;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -18,12 +21,17 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
+
+import com.beatriz.landmarketplace.config.SecurityConfig;
 
 @WebMvcTest(LandController.class)
+@Import(SecurityConfig.class)
 class LandControllerTest {
 
 	private static final String VALID_FEATURE = """
@@ -42,6 +50,8 @@ class LandControllerTest {
 			""";
 
 	private static final LandFilter NO_FILTER = new LandFilter(null, null, null, null);
+	private static final BoundingBox BOX = new BoundingBox(-47.5, -15.5, -46.5, -14.5);
+	private static final SearchCircle CIRCLE = new SearchCircle(-47.0, -15.0, 250.0);
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -50,11 +60,8 @@ class LandControllerTest {
 	private LandService landService;
 
 	@Test
-	void returnsCreatedFeature() throws Exception {
-		GeoJsonPolygon geometry = geoJsonRectangle(-47.0, -15.0, -46.998, -14.998);
-		when(landService.register(any())).thenReturn(new LandFeature("Feature", geometry,
-				new LandFeature.Properties(7L, new BigDecimal("150000.50"), "Flat plot close to the main road",
-						"owner@example.com", 47_600.25)));
+	void returnsCreatedFeatureForTheAuthenticatedUser() throws Exception {
+		when(landService.register(any(), eq(42L))).thenReturn(feature(true));
 
 		postLand(VALID_FEATURE)
 				.andExpect(status().isCreated())
@@ -65,7 +72,15 @@ class LandControllerTest {
 				.andExpect(jsonPath("$.properties.price").value(150000.50))
 				.andExpect(jsonPath("$.properties.description").value("Flat plot close to the main road"))
 				.andExpect(jsonPath("$.properties.contact").value("owner@example.com"))
-				.andExpect(jsonPath("$.properties.areaSqm").value(47_600.25));
+				.andExpect(jsonPath("$.properties.areaSqm").value(47_600.25))
+				.andExpect(jsonPath("$.properties.ownedByMe").value(true));
+	}
+
+	@Test
+	void requiresAuthenticationToRegisterLand() throws Exception {
+		mockMvc.perform(post("/api/lands").contentType(MediaType.APPLICATION_JSON).content(VALID_FEATURE))
+				.andExpect(status().isUnauthorized());
+		verifyNoInteractions(landService);
 	}
 
 	@Test
@@ -123,7 +138,7 @@ class LandControllerTest {
 
 	@Test
 	void reportsInvalidGeometryOnTheGeometryField() throws Exception {
-		when(landService.register(any()))
+		when(landService.register(any(), any()))
 				.thenThrow(new InvalidGeometryException("each ring must have at least 4 positions"));
 
 		postLand(VALID_FEATURE)
@@ -136,7 +151,7 @@ class LandControllerTest {
 
 	@Test
 	void returnsConflictWhenTheLandOverlapsAnExistingOne() throws Exception {
-		when(landService.register(any())).thenThrow(new LandOverlapException());
+		when(landService.register(any(), any())).thenThrow(new LandOverlapException());
 
 		postLand(VALID_FEATURE)
 				.andExpect(status().isConflict())
@@ -146,9 +161,26 @@ class LandControllerTest {
 	}
 
 	@Test
-	void listsLandsInTheBoundingBoxAsFeatureCollection() throws Exception {
-		when(landService.findInBoundingBox(new BoundingBox(-47.5, -15.5, -46.5, -14.5), NO_FILTER))
-				.thenReturn(LandFeatureCollection.of(List.of(feature())));
+	void rejectsMalformedJson() throws Exception {
+		postLand("{ \"type\": \"Feature\", ")
+				.andExpect(status().isBadRequest())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+	}
+
+	@Test
+	void hidesTheCauseOfUnexpectedErrors() throws Exception {
+		when(landService.register(any(), any())).thenThrow(new IllegalStateException("connection pool exhausted"));
+
+		postLand(VALID_FEATURE)
+				.andExpect(status().isInternalServerError())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+				.andExpect(jsonPath("$.detail").value("An unexpected error occurred"));
+	}
+
+	@Test
+	void listsLandsInTheBoundingBoxWithoutAToken() throws Exception {
+		when(landService.findInBoundingBox(BOX, NO_FILTER, null))
+				.thenReturn(LandFeatureCollection.of(List.of(feature(false))));
 
 		mockMvc.perform(get("/api/lands").param("bbox", "-47.5,-15.5,-46.5,-14.5"))
 				.andExpect(status().isOk())
@@ -156,7 +188,18 @@ class LandControllerTest {
 				.andExpect(jsonPath("$.features", hasSize(1)))
 				.andExpect(jsonPath("$.features[0].type").value("Feature"))
 				.andExpect(jsonPath("$.features[0].geometry.type").value("Polygon"))
-				.andExpect(jsonPath("$.features[0].properties.id").value(7));
+				.andExpect(jsonPath("$.features[0].properties.id").value(7))
+				.andExpect(jsonPath("$.features[0].properties.ownedByMe").value(false));
+	}
+
+	@Test
+	void passesTheAuthenticatedUserToTheBoundingBoxListing() throws Exception {
+		when(landService.findInBoundingBox(BOX, NO_FILTER, 42L))
+				.thenReturn(LandFeatureCollection.of(List.of(feature(true))));
+
+		mockMvc.perform(get("/api/lands").param("bbox", "-47.5,-15.5,-46.5,-14.5").with(user42()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.features[0].properties.ownedByMe").value(true));
 	}
 
 	@Test
@@ -175,14 +218,23 @@ class LandControllerTest {
 	}
 
 	@Test
-	void searchesLandsInTheCircle() throws Exception {
-		when(landService.findInCircle(new SearchCircle(-47.0, -15.0, 250.0), NO_FILTER))
-				.thenReturn(LandFeatureCollection.of(List.of(feature())));
+	void searchesLandsInTheCircleWithoutAToken() throws Exception {
+		when(landService.findInCircle(CIRCLE, NO_FILTER, null))
+				.thenReturn(LandFeatureCollection.of(List.of(feature(false))));
 
 		mockMvc.perform(get("/api/lands/search").param("lon", "-47.0").param("lat", "-15.0").param("radius", "250"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.type").value("FeatureCollection"))
 				.andExpect(jsonPath("$.features[0].properties.id").value(7));
+	}
+
+	@Test
+	void passesTheAuthenticatedUserToTheCircleSearch() throws Exception {
+		mockMvc.perform(get("/api/lands/search").param("lon", "-47.0").param("lat", "-15.0").param("radius", "250")
+				.with(user42()))
+				.andExpect(status().isOk());
+
+		verify(landService).findInCircle(CIRCLE, NO_FILTER, 42L);
 	}
 
 	@Test
@@ -202,8 +254,8 @@ class LandControllerTest {
 	@Test
 	void passesOptionalFiltersToTheBoundingBoxListing() throws Exception {
 		LandFilter filter = new LandFilter(new BigDecimal("1000.50"), new BigDecimal("2000"), 300.0, 400.5);
-		when(landService.findInBoundingBox(new BoundingBox(-47.5, -15.5, -46.5, -14.5), filter))
-				.thenReturn(LandFeatureCollection.of(List.of(feature())));
+		when(landService.findInBoundingBox(BOX, filter, null))
+				.thenReturn(LandFeatureCollection.of(List.of(feature(false))));
 
 		mockMvc.perform(get("/api/lands").param("bbox", "-47.5,-15.5,-46.5,-14.5")
 				.param("minPrice", "1000.50").param("maxPrice", "2000")
@@ -215,8 +267,8 @@ class LandControllerTest {
 	@Test
 	void passesOptionalFiltersToTheCircleSearch() throws Exception {
 		LandFilter filter = new LandFilter(null, new BigDecimal("2000"), 300.0, null);
-		when(landService.findInCircle(new SearchCircle(-47.0, -15.0, 250.0), filter))
-				.thenReturn(LandFeatureCollection.of(List.of(feature())));
+		when(landService.findInCircle(CIRCLE, filter, null))
+				.thenReturn(LandFeatureCollection.of(List.of(feature(false))));
 
 		mockMvc.perform(get("/api/lands/search").param("lon", "-47.0").param("lat", "-15.0").param("radius", "250")
 				.param("maxPrice", "2000").param("minArea", "300"))
@@ -239,31 +291,19 @@ class LandControllerTest {
 				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
 	}
 
-	@Test
-	void rejectsMalformedJson() throws Exception {
-		postLand("{ \"type\": \"Feature\", ")
-				.andExpect(status().isBadRequest())
-				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
-	}
-
-	@Test
-	void hidesTheCauseOfUnexpectedErrors() throws Exception {
-		when(landService.register(any())).thenThrow(new IllegalStateException("connection pool exhausted"));
-
-		postLand(VALID_FEATURE)
-				.andExpect(status().isInternalServerError())
-				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-				.andExpect(jsonPath("$.detail").value("An unexpected error occurred"));
-	}
-
-	private static LandFeature feature() {
+	private static LandFeature feature(boolean ownedByMe) {
 		return new LandFeature("Feature", geoJsonRectangle(-47.0, -15.0, -46.998, -14.998),
 				new LandFeature.Properties(7L, new BigDecimal("150000.50"), "Flat plot close to the main road",
-						"owner@example.com", 47_600.25));
+						"owner@example.com", 47_600.25, ownedByMe));
+	}
+
+	private static RequestPostProcessor user42() {
+		return jwt().jwt(token -> token.subject("42"));
 	}
 
 	private ResultActions postLand(String body) throws Exception {
-		return mockMvc.perform(post("/api/lands").contentType(MediaType.APPLICATION_JSON).content(body));
+		return mockMvc.perform(post("/api/lands").with(user42())
+				.contentType(MediaType.APPLICATION_JSON).content(body));
 	}
 
 }

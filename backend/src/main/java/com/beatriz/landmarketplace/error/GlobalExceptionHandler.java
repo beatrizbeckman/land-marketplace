@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import com.beatriz.landmarketplace.auth.EmailAlreadyRegisteredException;
+import com.beatriz.landmarketplace.auth.InvalidCredentialsException;
 import com.beatriz.landmarketplace.land.InvalidGeometryException;
 import com.beatriz.landmarketplace.land.InvalidSearchException;
 import com.beatriz.landmarketplace.land.LandOverlapException;
@@ -26,6 +28,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	@ExceptionHandler(LandOverlapException.class)
 	ProblemDetail handleLandOverlap(LandOverlapException exception) {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+	}
+
+	@ExceptionHandler(EmailAlreadyRegisteredException.class)
+	ProblemDetail handleEmailAlreadyRegistered(EmailAlreadyRegisteredException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+	}
+
+	@ExceptionHandler(InvalidCredentialsException.class)
+	ProblemDetail handleInvalidCredentials(InvalidCredentialsException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, exception.getMessage());
 	}
 
 	@ExceptionHandler(InvalidSearchException.class)

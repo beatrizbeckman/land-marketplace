@@ -18,7 +18,7 @@ public class LandService {
 	}
 
 	@Transactional
-	public LandFeature register(CreateLandRequest request) {
+	public LandFeature register(CreateLandRequest request, Long ownerId) {
 		Polygon polygon = converter.toPolygon(request.geometry());
 
 		landRepository.lockRegistrations();
@@ -27,31 +27,31 @@ public class LandService {
 		}
 
 		CreateLandRequest.Properties properties = request.properties();
-		Land land = landRepository.save(
-				new Land(polygon, properties.price(), properties.description(), properties.contact()));
-		return toFeature(land);
+		Land land = landRepository.save(new Land(polygon, properties.price(), properties.description(),
+				properties.contact(), ownerId));
+		return toFeature(land, ownerId);
 	}
 
 	@Transactional(readOnly = true)
-	public LandFeatureCollection findInBoundingBox(BoundingBox box, LandFilter filter) {
+	public LandFeatureCollection findInBoundingBox(BoundingBox box, LandFilter filter, Long currentUserId) {
 		return toFeatureCollection(landRepository.findIntersectingBoundingBox(
 				box.minLon(), box.minLat(), box.maxLon(), box.maxLat(),
-				filter.minPrice(), filter.maxPrice(), filter.minArea(), filter.maxArea()));
+				filter.minPrice(), filter.maxPrice(), filter.minArea(), filter.maxArea()), currentUserId);
 	}
 
 	@Transactional(readOnly = true)
-	public LandFeatureCollection findInCircle(SearchCircle circle, LandFilter filter) {
+	public LandFeatureCollection findInCircle(SearchCircle circle, LandFilter filter, Long currentUserId) {
 		return toFeatureCollection(landRepository.findWithinRadius(
 				circle.lon(), circle.lat(), circle.radiusInMeters(),
-				filter.minPrice(), filter.maxPrice(), filter.minArea(), filter.maxArea()));
+				filter.minPrice(), filter.maxPrice(), filter.minArea(), filter.maxArea()), currentUserId);
 	}
 
-	private LandFeatureCollection toFeatureCollection(List<Land> lands) {
-		return LandFeatureCollection.of(lands.stream().map(this::toFeature).toList());
+	private LandFeatureCollection toFeatureCollection(List<Land> lands, Long currentUserId) {
+		return LandFeatureCollection.of(lands.stream().map(land -> toFeature(land, currentUserId)).toList());
 	}
 
-	private LandFeature toFeature(Land land) {
-		return LandFeature.of(land, converter.toGeoJson(land.getGeometry()));
+	private LandFeature toFeature(Land land, Long currentUserId) {
+		return LandFeature.of(land, converter.toGeoJson(land.getGeometry()), currentUserId);
 	}
 
 }

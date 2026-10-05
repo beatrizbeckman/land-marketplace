@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import com.beatriz.landmarketplace.TestcontainersConfiguration;
 
@@ -31,13 +32,22 @@ class LandRegistrationConcurrencyTest {
 	@Autowired
 	private LandRepository landRepository;
 
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
+
 	@AfterEach
-	void deleteLands() {
-		landRepository.deleteAll();
+	void deleteData() {
+		jdbcTemplate.update("DELETE FROM lands");
+		jdbcTemplate.update("DELETE FROM users");
 	}
 
 	@Test
 	void onlyOneOfManySimultaneousOverlappingRegistrationsSucceeds() throws Exception {
+		Long ownerId = jdbcTemplate.queryForObject("""
+				INSERT INTO users (name, email, password_hash)
+				VALUES ('Owner', 'owner@example.com', 'not-a-real-hash')
+				RETURNING id
+				""", Long.class);
 		CreateLandRequest request = new CreateLandRequest(
 				geoJsonRectangle(-47.000, -15.000, -46.998, -14.998),
 				new CreateLandRequest.Properties(new BigDecimal("150000.50"),
@@ -50,7 +60,7 @@ class LandRegistrationConcurrencyTest {
 				attempts.add(executor.submit(() -> {
 					start.await();
 					try {
-						landService.register(request);
+						landService.register(request, ownerId);
 						return true;
 					}
 					catch (LandOverlapException exception) {

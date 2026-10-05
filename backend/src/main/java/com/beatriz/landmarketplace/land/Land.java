@@ -29,6 +29,10 @@ public class Land {
 
 	private String contact;
 
+	// Only the id is needed (ownedByMe), so the owner is not mapped as an entity association.
+	@Column(name = "owner_id")
+	private Long ownerId;
+
 	// Generated column: PostgreSQL computes it from the polygon, Hibernate only reads it back after the insert.
 	@Generated
 	@Column(name = "area_sqm")
@@ -37,11 +41,12 @@ public class Land {
 	protected Land() {
 	}
 
-	public Land(Polygon geometry, BigDecimal price, String description, String contact) {
+	public Land(Polygon geometry, BigDecimal price, String description, String contact, Long ownerId) {
 		this.geometry = geometry;
 		this.price = price;
 		this.description = description;
 		this.contact = contact;
+		this.ownerId = ownerId;
 	}
 
 	public Long getId() {
@@ -62,6 +67,10 @@ public class Land {
 
 	public String getContact() {
 		return contact;
+	}
+
+	public Long getOwnerId() {
+		return ownerId;
 	}
 
 	public Double getAreaSqm() {

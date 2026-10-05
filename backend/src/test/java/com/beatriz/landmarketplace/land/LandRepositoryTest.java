@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.withinPercentage;
 import java.math.BigDecimal;
 import java.util.List;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Polygon;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +16,7 @@ import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 
 import com.beatriz.landmarketplace.TestcontainersConfiguration;
+import com.beatriz.landmarketplace.auth.User;
 
 @DataJpaTest
 @Import(TestcontainersConfiguration.class)
@@ -32,6 +34,13 @@ class LandRepositoryTest {
 	@Autowired
 	private TestEntityManager entityManager;
 
+	private Long ownerId;
+
+	@BeforeEach
+	void createOwner() {
+		ownerId = entityManager.persistAndFlush(new User("Owner", "owner@example.com", "not-a-real-hash")).getId();
+	}
+
 	@Test
 	void savesPolygonAndReadsItBackWithAreaComputedByTheDatabase() {
 		Polygon square = rectangle(-47.000, -15.000, -46.999, -14.999);
@@ -45,6 +54,7 @@ class LandRepositoryTest {
 		assertThat(found.getPrice()).isEqualByComparingTo("150000.50");
 		assertThat(found.getDescription()).isEqualTo("Flat plot close to the main road");
 		assertThat(found.getContact()).isEqualTo("owner@example.com");
+		assertThat(found.getOwnerId()).isEqualTo(ownerId);
 		// 0.001 degrees at latitude -15 is about 107.5 m east-west by 110.7 m north-south.
 		assertThat(found.getAreaSqm()).isCloseTo(11_900.0, withinPercentage(1));
 	}
@@ -209,7 +219,7 @@ class LandRepositoryTest {
 
 	private Land save(Polygon polygon, String price) {
 		return landRepository.saveAndFlush(new Land(polygon, new BigDecimal(price),
-				"Flat plot close to the main road", "owner@example.com"));
+				"Flat plot close to the main road", "owner@example.com", ownerId));
 	}
 
 }
