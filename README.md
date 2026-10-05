@@ -76,6 +76,9 @@ The application is available at `http://localhost:5173`.
     cd backend
     ./mvnw test
 
+The tests start their own PostGIS container with Testcontainers, so Docker must be
+running. The `db` service from `docker-compose.yml` is not required.
+
 TODO: how to open the coverage report (JaCoCo).
 
 ### Frontend
