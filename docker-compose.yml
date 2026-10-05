@@ -1,3 +1,5 @@
+# Every value has a development default, so `docker compose up` works without a .env file.
+# These defaults are for local evaluation only; override them through .env (see .env.example).
 services:
   db:
     image: postgis/postgis:16-3.4
@@ -7,7 +9,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
@@ -15,6 +17,22 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  api:
+    build: ./backend
+    container_name: land-marketplace-api
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-land_marketplace}
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-outside-local-development}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-60}
+      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:5173}
+    ports:
+      - "8081:8081"
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   db_data:
