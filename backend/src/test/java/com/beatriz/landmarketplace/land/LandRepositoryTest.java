@@ -1,15 +1,13 @@
 package com.beatriz.landmarketplace.land;
 
+import static com.beatriz.landmarketplace.land.TestPolygons.rectangle;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.withinPercentage;
 
 import java.math.BigDecimal;
 
 import org.junit.jupiter.api.Test;
-import org.locationtech.jts.geom.Coordinate;
-import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Polygon;
-import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
@@ -21,7 +19,7 @@ import com.beatriz.landmarketplace.TestcontainersConfiguration;
 @Import(TestcontainersConfiguration.class)
 class LandRepositoryTest {
 
-	private static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory(new PrecisionModel(), 4326);
+	private static final Polygon EXISTING = rectangle(-47.000, -15.000, -46.998, -14.998);
 
 	@Autowired
 	private LandRepository landRepository;
@@ -31,11 +29,9 @@ class LandRepositoryTest {
 
 	@Test
 	void savesPolygonAndReadsItBackWithAreaComputedByTheDatabase() {
-		Polygon square = square(-47.0, -15.0, 0.001);
-		Land land = new Land(square, new BigDecimal("150000.50"), "Flat plot close to the main road",
-				"owner@example.com");
+		Polygon square = rectangle(-47.000, -15.000, -46.999, -14.999);
 
-		Long id = landRepository.saveAndFlush(land).getId();
+		Long id = save(square).getId();
 		entityManager.clear();
 
 		Land found = landRepository.findById(id).orElseThrow();
@@ -48,15 +44,58 @@ class LandRepositoryTest {
 		assertThat(found.getAreaSqm()).isCloseTo(11_900.0, withinPercentage(1));
 	}
 
-	private static Polygon square(double minLon, double minLat, double sideInDegrees) {
-		double maxLon = minLon + sideInDegrees;
-		double maxLat = minLat + sideInDegrees;
-		return GEOMETRY_FACTORY.createPolygon(new Coordinate[] {
-				new Coordinate(minLon, minLat),
-				new Coordinate(maxLon, minLat),
-				new Coordinate(maxLon, maxLat),
-				new Coordinate(minLon, maxLat),
-				new Coordinate(minLon, minLat) });
+	@Test
+	void detectsPartialOverlap() {
+		save(EXISTING);
+
+		assertThat(landRepository.existsOverlapping(rectangle(-46.999, -14.999, -46.997, -14.997))).isTrue();
+	}
+
+	@Test
+	void detectsPolygonInsideAnExistingPlot() {
+		save(EXISTING);
+
+		assertThat(landRepository.existsOverlapping(rectangle(-46.9995, -14.9995, -46.9985, -14.9985))).isTrue();
+	}
+
+	@Test
+	void detectsPolygonThatContainsAnExistingPlot() {
+		save(EXISTING);
+
+		assertThat(landRepository.existsOverlapping(rectangle(-47.001, -15.001, -46.997, -14.997))).isTrue();
+	}
+
+	@Test
+	void detectsIdenticalPolygon() {
+		save(EXISTING);
+
+		assertThat(landRepository.existsOverlapping(rectangle(-47.000, -15.000, -46.998, -14.998))).isTrue();
+	}
+
+	@Test
+	void allowsPolygonThatSharesOnlyABorder() {
+		save(EXISTING);
+
+		assertThat(landRepository.existsOverlapping(rectangle(-46.998, -15.000, -46.996, -14.998))).isFalse();
+	}
+
+	@Test
+	void allowsPolygonThatSharesOnlyAVertex() {
+		save(EXISTING);
+
+		assertThat(landRepository.existsOverlapping(rectangle(-46.998, -14.998, -46.996, -14.996))).isFalse();
+	}
+
+	@Test
+	void allowsDistantPolygon() {
+		save(EXISTING);
+
+		assertThat(landRepository.existsOverlapping(rectangle(-46.900, -15.000, -46.898, -14.998))).isFalse();
+	}
+
+	private Land save(Polygon polygon) {
+		return landRepository.saveAndFlush(new Land(polygon, new BigDecimal("150000.50"),
+				"Flat plot close to the main road", "owner@example.com"));
 	}
 
 }

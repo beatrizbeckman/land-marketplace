@@ -19,13 +19,26 @@ class GeoJsonPolygonConverter {
 	// GeoJSON coordinates are always WGS 84 longitude/latitude, the same SRID as the geom column.
 	private static final int SRID = 4326;
 
+	// A closed ring needs three distinct vertices plus the repeated first one.
+	private static final int MIN_RING_POSITIONS = 4;
+
 	private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), SRID);
 
 	Polygon toPolygon(GeoJsonPolygon geoJson) {
+		if (!POLYGON_TYPE.equals(geoJson.type())) {
+			throw new InvalidGeometryException("geometry type must be Polygon");
+		}
+		if (geoJson.coordinates() == null || geoJson.coordinates().isEmpty()) {
+			throw new InvalidGeometryException("geometry must have at least one ring");
+		}
 		List<LinearRing> rings = geoJson.coordinates().stream().map(this::toLinearRing).toList();
 		LinearRing shell = rings.getFirst();
 		LinearRing[] holes = rings.subList(1, rings.size()).toArray(LinearRing[]::new);
-		return geometryFactory.createPolygon(shell, holes);
+		Polygon polygon = geometryFactory.createPolygon(shell, holes);
+		if (!polygon.isValid()) {
+			throw new InvalidGeometryException("geometry must be a valid polygon without self-intersections");
+		}
+		return polygon;
 	}
 
 	GeoJsonPolygon toGeoJson(Polygon polygon) {
@@ -38,10 +51,29 @@ class GeoJsonPolygonConverter {
 	}
 
 	private LinearRing toLinearRing(List<List<Double>> positions) {
-		Coordinate[] coordinates = positions.stream()
-				.map(position -> new Coordinate(position.get(0), position.get(1)))
-				.toArray(Coordinate[]::new);
+		if (positions == null || positions.size() < MIN_RING_POSITIONS) {
+			throw new InvalidGeometryException("each ring must have at least 4 positions");
+		}
+		Coordinate[] coordinates = positions.stream().map(this::toCoordinate).toArray(Coordinate[]::new);
+		if (!coordinates[0].equals2D(coordinates[coordinates.length - 1])) {
+			throw new InvalidGeometryException("each ring must be closed: first and last positions must be equal");
+		}
 		return geometryFactory.createLinearRing(coordinates);
+	}
+
+	private Coordinate toCoordinate(List<Double> position) {
+		if (position == null || position.size() < 2 || position.get(0) == null || position.get(1) == null) {
+			throw new InvalidGeometryException("each position must be [longitude, latitude]");
+		}
+		double longitude = position.get(0);
+		double latitude = position.get(1);
+		if (longitude < -180 || longitude > 180) {
+			throw new InvalidGeometryException("longitude must be between -180 and 180");
+		}
+		if (latitude < -90 || latitude > 90) {
+			throw new InvalidGeometryException("latitude must be between -90 and 90");
+		}
+		return new Coordinate(longitude, latitude);
 	}
 
 	private List<List<Double>> toPositions(LinearRing ring) {
