@@ -34,7 +34,7 @@ TODO: step-by-step to start the full environment with docker-compose.
 ### Prerequisites
 
 - JDK 23
-- Node.js 20 or newer
+- Node.js 20.19+ or 22.12+
 - Docker (used only to run the database) or a local PostgreSQL with PostGIS
 
 ### Database
@@ -56,6 +56,10 @@ The API starts at `http://localhost:8081`. On Windows (outside Git Bash), use
 
 The connection settings can be overridden with the `DB_URL`, `DB_USERNAME`,
 `DB_PASSWORD` and `SERVER_PORT` environment variables.
+
+The backend does not read the `.env` file. If you change `POSTGRES_DB`,
+`POSTGRES_USER` or `POSTGRES_PASSWORD` there, set `DB_URL`, `DB_USERNAME` and
+`DB_PASSWORD` to the matching values before starting the backend.
 
 ### Frontend
 

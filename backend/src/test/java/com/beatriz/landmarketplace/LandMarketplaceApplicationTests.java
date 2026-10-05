@@ -1,10 +1,10 @@
-package com.beatriz.mvp;
+package com.beatriz.landmarketplace;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class MvpApplicationTests {
+class LandMarketplaceApplicationTests {
 
 	@Test
 	void contextLoads() {

@@ -1,13 +1,13 @@
-package com.beatriz.mvp;
+package com.beatriz.landmarketplace;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class MvpApplication {
+public class LandMarketplaceApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(MvpApplication.class, args);
+		SpringApplication.run(LandMarketplaceApplication.class, args);
 	}
 
 }

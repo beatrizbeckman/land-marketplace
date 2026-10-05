@@ -9,9 +9,9 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.beatriz</groupId>
-	<artifactId>mvp</artifactId>
+	<artifactId>land-marketplace</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>mvp</name>
+	<name>land-marketplace</name>
 	<description/>
 	<url/>
 	<licenses>
