@@ -6,12 +6,14 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -139,6 +141,66 @@ class LandControllerTest {
 				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
 				.andExpect(jsonPath("$.status").value(409))
 				.andExpect(jsonPath("$.detail").value("The polygon overlaps an existing land plot"));
+	}
+
+	@Test
+	void listsLandsInTheBoundingBoxAsFeatureCollection() throws Exception {
+		when(landService.findInBoundingBox(new BoundingBox(-47.5, -15.5, -46.5, -14.5)))
+				.thenReturn(LandFeatureCollection.of(List.of(feature())));
+
+		mockMvc.perform(get("/api/lands").param("bbox", "-47.5,-15.5,-46.5,-14.5"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.type").value("FeatureCollection"))
+				.andExpect(jsonPath("$.features", hasSize(1)))
+				.andExpect(jsonPath("$.features[0].type").value("Feature"))
+				.andExpect(jsonPath("$.features[0].geometry.type").value("Polygon"))
+				.andExpect(jsonPath("$.features[0].properties.id").value(7));
+	}
+
+	@Test
+	void requiresTheBoundingBox() throws Exception {
+		mockMvc.perform(get("/api/lands"))
+				.andExpect(status().isBadRequest())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+	}
+
+	@Test
+	void rejectsMalformedBoundingBox() throws Exception {
+		mockMvc.perform(get("/api/lands").param("bbox", "-47.5,-15.5"))
+				.andExpect(status().isBadRequest())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+				.andExpect(jsonPath("$.detail").value("bbox must be minLon,minLat,maxLon,maxLat"));
+	}
+
+	@Test
+	void searchesLandsInTheCircle() throws Exception {
+		when(landService.findInCircle(new SearchCircle(-47.0, -15.0, 250.0)))
+				.thenReturn(LandFeatureCollection.of(List.of(feature())));
+
+		mockMvc.perform(get("/api/lands/search").param("lon", "-47.0").param("lat", "-15.0").param("radius", "250"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.type").value("FeatureCollection"))
+				.andExpect(jsonPath("$.features[0].properties.id").value(7));
+	}
+
+	@Test
+	void rejectsNonPositiveRadius() throws Exception {
+		mockMvc.perform(get("/api/lands/search").param("lon", "-47.0").param("lat", "-15.0").param("radius", "0"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.detail").value("radius must be greater than zero"));
+	}
+
+	@Test
+	void rejectsNonNumericSearchParameters() throws Exception {
+		mockMvc.perform(get("/api/lands/search").param("lon", "west").param("lat", "-15.0").param("radius", "250"))
+				.andExpect(status().isBadRequest())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+	}
+
+	private static LandFeature feature() {
+		return new LandFeature("Feature", geoJsonRectangle(-47.0, -15.0, -46.998, -14.998),
+				new LandFeature.Properties(7L, new BigDecimal("150000.50"), "Flat plot close to the main road",
+						"owner@example.com", 47_600.25));
 	}
 
 	private ResultActions postLand(String body) throws Exception {

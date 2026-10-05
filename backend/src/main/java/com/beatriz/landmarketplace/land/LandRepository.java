@@ -1,5 +1,7 @@
 package com.beatriz.landmarketplace.land;
 
+import java.util.List;
+
 import org.locationtech.jts.geom.Polygon;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -24,5 +26,28 @@ interface LandRepository extends JpaRepository<Land, Long> {
 			)
 			""", nativeQuery = true)
 	boolean existsOverlapping(@Param("polygon") Polygon polygon);
+
+	@Query(value = """
+			SELECT *
+			FROM lands
+			WHERE ST_Intersects(geom, ST_MakeEnvelope(:minLon, :minLat, :maxLon, :maxLat, 4326))
+			ORDER BY id
+			""", nativeQuery = true)
+	List<Land> findIntersectingBoundingBox(@Param("minLon") double minLon, @Param("minLat") double minLat,
+			@Param("maxLon") double maxLon, @Param("maxLat") double maxLat);
+
+	// On geography ST_DWithin measures real meters over the spheroid, at any latitude. The cast
+	// is written exactly like the expression of lands_geog_idx so the planner can use that index.
+	@Query(value = """
+			SELECT *
+			FROM lands
+			WHERE ST_DWithin(
+			    CAST(geom AS geography),
+			    CAST(ST_SetSRID(ST_MakePoint(:lon, :lat), 4326) AS geography),
+			    :radiusInMeters)
+			ORDER BY id
+			""", nativeQuery = true)
+	List<Land> findWithinRadius(@Param("lon") double lon, @Param("lat") double lat,
+			@Param("radiusInMeters") double radiusInMeters);
 
 }

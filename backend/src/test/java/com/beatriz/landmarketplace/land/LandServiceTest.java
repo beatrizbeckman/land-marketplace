@@ -83,6 +83,40 @@ class LandServiceTest {
 		verifyNoInteractions(landRepository);
 	}
 
+	@Test
+	void returnsLandsInTheBoundingBoxAsFeatureCollection() {
+		when(landRepository.findIntersectingBoundingBox(-47.5, -15.5, -46.5, -14.5)).thenReturn(List.of(land()));
+
+		LandFeatureCollection collection = landService.findInBoundingBox(new BoundingBox(-47.5, -15.5, -46.5, -14.5));
+
+		assertThat(collection.type()).isEqualTo("FeatureCollection");
+		assertThat(collection.features()).singleElement()
+				.satisfies(feature -> assertThat(feature.geometry()).isEqualTo(GEOMETRY));
+	}
+
+	@Test
+	void returnsLandsInTheCircleAsFeatureCollection() {
+		when(landRepository.findWithinRadius(-47.0, -15.0, 250.0)).thenReturn(List.of(land()));
+
+		LandFeatureCollection collection = landService.findInCircle(new SearchCircle(-47.0, -15.0, 250.0));
+
+		assertThat(collection.features()).singleElement()
+				.satisfies(feature -> assertThat(feature.properties().contact()).isEqualTo("owner@example.com"));
+	}
+
+	@Test
+	void returnsEmptyFeatureCollectionWhenNothingIsFound() {
+		LandFeatureCollection collection = landService.findInCircle(new SearchCircle(-47.0, -15.0, 250.0));
+
+		assertThat(collection.type()).isEqualTo("FeatureCollection");
+		assertThat(collection.features()).isEmpty();
+	}
+
+	private static Land land() {
+		return new Land(TestPolygons.rectangle(-47.000, -15.000, -46.998, -14.998), new BigDecimal("150000.50"),
+				"Flat plot close to the main road", "owner@example.com");
+	}
+
 	private static CreateLandRequest request(GeoJsonPolygon geometry) {
 		return new CreateLandRequest(geometry, new CreateLandRequest.Properties(new BigDecimal("150000.50"),
 				"Flat plot close to the main road", "owner@example.com"));

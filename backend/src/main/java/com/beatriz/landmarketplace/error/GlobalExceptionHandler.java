@@ -14,6 +14,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import com.beatriz.landmarketplace.land.InvalidGeometryException;
+import com.beatriz.landmarketplace.land.InvalidSearchAreaException;
 import com.beatriz.landmarketplace.land.LandOverlapException;
 
 @RestControllerAdvice
@@ -25,6 +26,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	@ExceptionHandler(LandOverlapException.class)
 	ProblemDetail handleLandOverlap(LandOverlapException exception) {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+	}
+
+	@ExceptionHandler(InvalidSearchAreaException.class)
+	ProblemDetail handleInvalidSearchArea(InvalidSearchAreaException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
 	}
 
 	@ExceptionHandler(InvalidGeometryException.class)

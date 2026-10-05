@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.withinPercentage;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Polygon;
@@ -91,6 +92,50 @@ class LandRepositoryTest {
 		save(EXISTING);
 
 		assertThat(landRepository.existsOverlapping(rectangle(-46.900, -15.000, -46.898, -14.998))).isFalse();
+	}
+
+	@Test
+	void findsOnlyLandsIntersectingTheBoundingBox() {
+		Land inside = save(rectangle(-47.000, -15.000, -46.998, -14.998));
+		Land crossingTheEdge = save(rectangle(-46.991, -15.000, -46.989, -14.998));
+		save(rectangle(-46.900, -15.000, -46.898, -14.998));
+
+		List<Land> found = landRepository.findIntersectingBoundingBox(-47.010, -15.010, -46.990, -14.990);
+
+		assertThat(found).extracting(Land::getId).containsExactly(inside.getId(), crossingTheEdge.getId());
+	}
+
+	@Test
+	void findsNothingInAnEmptyBoundingBox() {
+		save(EXISTING);
+
+		assertThat(landRepository.findIntersectingBoundingBox(-40.0, -10.0, -39.0, -9.0)).isEmpty();
+	}
+
+	// The center is 0.001 degrees west of EXISTING, about 107.5 m at this latitude.
+	@Test
+	void findsLandWhenTheCircleReachesOnlyItsBorder() {
+		Land land = save(EXISTING);
+
+		List<Land> found = landRepository.findWithinRadius(-47.001, -14.999, 110);
+
+		assertThat(found).extracting(Land::getId).containsExactly(land.getId());
+	}
+
+	@Test
+	void findsNothingWhenTheCircleStopsShortOfTheLand() {
+		save(EXISTING);
+
+		assertThat(landRepository.findWithinRadius(-47.001, -14.999, 100)).isEmpty();
+	}
+
+	@Test
+	void findsLandThatContainsTheWholeCircle() {
+		Land land = save(EXISTING);
+
+		List<Land> found = landRepository.findWithinRadius(-46.999, -14.999, 10);
+
+		assertThat(found).extracting(Land::getId).containsExactly(land.getId());
 	}
 
 	private Land save(Polygon polygon) {
