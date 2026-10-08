@@ -245,10 +245,13 @@ API, which applies the database migrations by itself.
 
 | Service | URL |
 |---|---|
+| Web application | http://localhost:80 |
 | API | http://localhost:8081 |
 | Database | `localhost:5432`, database `land_marketplace`, user `postgres`, password `postgres` |
 
-<!-- frontend: add the frontend service URL here once its container is part of docker-compose.yml -->
+The web container serves the production build of the frontend through Nginx, which
+also proxies `/api` requests to the API container. If port 80 is already in use on
+your machine, set `WEB_PORT` in `.env`.
 
 To stop everything, press `Ctrl+C` or run `docker compose down`. Add `-v` to also
 delete the database volume.
@@ -264,6 +267,23 @@ A quick check that the API is up:
     curl "http://localhost:8081/api/lands?bbox=-47.01,-15.01,-46.99,-14.99"
 
 It returns `{"type":"FeatureCollection","features":[]}` on an empty database.
+
+### Inspecting the database
+
+The database container ships `psql`, so no local installation is needed:
+
+    docker exec -it land-marketplace-db psql -U postgres -d land_marketplace
+
+Useful commands once inside:
+
+    \dt                                              -- list the tables
+    SELECT id, name, email FROM users;               -- registered users
+    SELECT id, price, description FROM lands;        -- registered plots
+    \q                                               -- quit
+
+Passwords appear only as BCrypt hashes, and each plot's `owner_id` points to the
+user who created it. Any graphical client (pgAdmin, DBeaver) also works, connecting
+to `localhost:5432` with the credentials from the table above.
 
 ## 4. Running without Docker
 
@@ -359,4 +379,31 @@ What the tests cover:
 
 ### Frontend
 
-<!-- frontend: add the test command, the coverage report location and the 80% threshold here -->
+    cd frontend
+    npm test
+
+This runs the whole Vitest suite. The API is mocked with MSW, so no backend or
+database is needed.
+
+    npm run test:coverage
+
+This runs the same suite and writes the coverage report, **failing if statement,
+branch, function or line coverage is below 80%** (thresholds enforced in
+`vite.config.js`).
+
+Open the report at:
+
+    frontend/coverage/index.html
+
+Current coverage is about 92% of statements, 82% of branches, 93% of functions and
+93% of lines.
+
+What the tests cover:
+
+- **Map interactions:** drawing the plot polygon, drawing and editing the search
+  circle with the live radius, bounding-box tracking, land selection and styling.
+- **Forms and validation:** the registration form (price, description, contact),
+  login and sign-up, mirroring the backend rules.
+- **Data flow:** the API client, query behaviour (circle search replacing the
+  bounding-box listing), price and area filters.
+- **Auth:** the auth context, protected routes, token handling.
