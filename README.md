@@ -25,9 +25,10 @@ for land plots happens directly on an interactive map.
 |---|---|
 | Backend | Java 21, Spring Boot 4.1, Spring Data JPA, Hibernate Spatial, Spring Security |
 | Database | PostgreSQL 16 with PostGIS 3.4, schema versioned with Flyway |
-| Frontend | React, Vite, OpenLayers |
-| Tests | JUnit, Mockito, Testcontainers (real PostGIS), JaCoCo |
-| Infrastructure | Docker Compose |
+| Frontend | React 19, Vite, OpenLayers, TanStack Query, React Router, React Hook Form, Zod, Tailwind CSS |
+| Backend tests | JUnit, Mockito, Testcontainers (real PostGIS), JaCoCo |
+| Frontend tests | Vitest, Testing Library, MSW, V8 coverage |
+| Infrastructure | Docker Compose, Nginx |
 
 ## 2. How it works
 
@@ -53,6 +54,36 @@ com.beatriz.landmarketplace
 A hexagonal architecture was considered and discarded: the central rule of the
 system (overlap detection) is a PostGIS query by requirement, so an isolated domain
 layer would be almost empty and every port would have a single implementation.
+
+The frontend is a single-page application, also organised by feature:
+
+```
+frontend/src
+├── app/              routes, providers and the home screen that composes the features
+├── features/auth/    login and sign-up pages, auth context, protected route
+├── features/map/     the OpenLayers map, its layers, styles and bounding-box tracking
+├── features/lands/   list, popup, detail view, filters and the registration flow
+├── features/search/  the circle search interaction
+└── shared/           HTTP client, token storage, geometry helpers and UI primitives
+```
+
+- **Server state** lives in TanStack Query. One query lists the plots, and its key
+  carries the bounding box or the search circle plus the filters, so moving the map,
+  drawing a circle or changing a filter cancels the request in flight and refetches.
+  A drawn circle replaces the bounding-box listing until it is cleared.
+- **Projections:** OpenLayers renders in EPSG:3857 and the API speaks EPSG:4326, so
+  every geometry is converted in one helper module on the way in and out. The radius
+  of the search circle is measured as a geodesic distance, because map units in
+  EPSG:3857 stretch with latitude and the API expects real meters.
+- **Forms** use React Hook Form with Zod schemas that mirror the backend rules, so
+  most mistakes are caught before a request is sent. The backend remains the
+  authority: its per-field errors and the `409` for an overlap are shown in the form.
+- **Authentication:** the token is kept in `localStorage` and attached by a single
+  HTTP client. On a `401` the client clears it; public requests are then retried
+  anonymously, and protected ones redirect to the login page. A plot being
+  registered at that moment is kept in `sessionStorage` and restored after login.
+- **Same-origin API:** the browser always calls `/api`. The Vite dev server proxies
+  it to `localhost:8081` and, in Docker, Nginx proxies it to the API container.
 
 ### Data flow
 

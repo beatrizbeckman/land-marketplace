@@ -25,12 +25,14 @@ class LandController {
 		this.landService = landService;
 	}
 
+	// register a plot of land
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	LandFeature register(@Valid @RequestBody CreateLandRequest request, @AuthenticationPrincipal Jwt jwt) {
 		return landService.register(request, userId(jwt));
 	}
 
+	// lists plots within the map's visible area
 	@GetMapping
 	LandFeatureCollection listInBoundingBox(@RequestParam String bbox,
 			@RequestParam(required = false) BigDecimal minPrice,
@@ -42,6 +44,7 @@ class LandController {
 				new LandFilter(minPrice, maxPrice, minArea, maxArea), userId(jwt));
 	}
 
+	// search for plots of land within a circle
 	@GetMapping("/search")
 	LandFeatureCollection searchInCircle(@RequestParam double lon, @RequestParam double lat,
 			@RequestParam double radius,
